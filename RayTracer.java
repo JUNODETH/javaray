@@ -17,6 +17,7 @@ public class RayTracer {
     Material mat3 = new Material(new Color(0xFFDF00DF), 0.5f);
     Color ambientLighting = Color.BLACK;
     float lightIntesity = 1.0f;
+    int maxBounces = 1;
 
     //float strongest = 0f;
 
@@ -35,9 +36,9 @@ public class RayTracer {
 
         Vector<Drawable> objects = new Vector<>();
         Sphere obj1 = new Sphere(new Vector3(0, 0, 5), 1, mat1);
-        Sphere obj2 = new Sphere(new Vector3(2, -1, 4), 1.0, mat1);
-        Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat3);
-        Plane floor = new Plane(new Vector3(0, -2.0, 0), new Vector3(0, 1.0, 0), 2, mat2);
+        Sphere obj2 = new Sphere(new Vector3(2, -1, 4), 1.0, mat3);
+        Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat1);
+        Plane floor = new Plane(new Vector3(0, -2.0, 0), new Vector3(0, 1.0, 0), 2, mat3);
 
         objects.add(obj1);
         objects.add(obj2);
@@ -140,87 +141,58 @@ public class RayTracer {
                     ray = new Ray(start, new Vector3(0, 0, 1));
                 }
                 else{
-                    
                     ray = new Ray(cam.pos, dir);
                 }
 
                 //---------------SHOOTY PART--------------------
                 Drawable closestObjAddress[] = { null }; //janky workaround to do C like pointer stuff but with single element arrays
+                //init a few things
+                float closestDist;
+                Drawable closestObj;
 
-                float closestDist = rayEach(objects, ray, closestObjAddress); 
-                Drawable closestObj = closestObjAddress[0];
                 //----------------------------------------------------------- repeat this for bouncing
-                if(closestDist <= 0){ //hit sky
-                    float t = ((float) ray.dir.y + 1.0f)*0.5f;
-                    //System.out.println(t);
-                    finalColor = HDRColor.lerpColors(skybottomColor, skytopColor, t);
-                }
-                else{
-                    Vector3 end = cam.pos.add(ray.pointAt(closestDist));
-                    Vector3 normal = closestObj.getNormal(end);
-                    boolean blocked = false;
-                    Ray endRay = new Ray(end, directionalLight.inverted());
-                    for (Drawable obj : objects) {
-                        if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
-                            blocked = obj.hitSimple(endRay);
-                            if(blocked){
-                                finalColor = new HDRColor(0, 0, 0);
-                                break;
-                            }
-                        }
-                        
+                for (int k = 0; k <= maxBounces; k++) {
+                    closestDist = rayEach(objects, ray, closestObjAddress); 
+                    closestObj = closestObjAddress[0];
+
+                    if(closestDist <= 0){ //hit sky
+                        float t = ((float) ray.dir.y + 1.0f)*0.5f;
+                        //System.out.println(t);
+                        finalColor = finalColor.add(HDRColor.lerpColors(skybottomColor, skytopColor, t));
+                        break;
                     }
-                    if(!blocked){
-                        //Vector3 normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
-                        float lightStrenght = (float) normal.dot(directionalLight.inverted());
-                        HDRColor col = closestObj.getMaterial().getColor();
-                        if(lightStrenght < 0.0f){
-                            lightStrenght = 0f;
-                        }
-                        col = col.multiply(lightStrenght*lightIntesity);
-
-                        finalColor = col;
-                    }
-
-                    if(closestObj.getMaterial().getRoughness() < 0.6f){ //hardcoded second bounce
-                        //ray reflection: r = d - 2*(d,n)*n
-                        dir = dir.sub(normal.mult(2 * dir.dot(normal)));
-                        ray = new Ray(end, dir.normalized());
-
-                        closestDist = rayEach(objects, ray, closestObjAddress); 
-                        closestObj = closestObjAddress[0];
-
-                        if(closestDist <= 0){ //hit sky
-                            float t = ((float) ray.dir.y + 1.0f)*0.5f;
-                            //System.out.println(t);
-                            finalColor = finalColor.add(HDRColor.lerpColors(skybottomColor, skytopColor, t));
-                        }
-                        else{
-                            end = cam.pos.add(ray.pointAt(closestDist));
-                            blocked = false;
-                            endRay = new Ray(end, directionalLight.inverted());
-                            for (Drawable obj : objects) {
-                                if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
-                                    blocked = obj.hitSimple(endRay);
-                                    if(blocked){
-                                        //finalColor = finalColor.add(new HDRColor(0, 0, 0));
-                                        break;
-                                    }
+                    else{
+                        Vector3 end = cam.pos.add(ray.pointAt(closestDist));
+                        Vector3 normal = closestObj.getNormal(end);
+                        boolean blocked = false;
+                        Ray endRay = new Ray(end, directionalLight.inverted());
+                        for (Drawable obj : objects) {
+                            if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
+                                blocked = obj.hitSimple(endRay);
+                                if(blocked){
+                                    //finalColor = finalColor.add(new HDRColor(0, 0, 0)); //redundant because yea
+                                    break;
                                 }
-                                
-                            }
-                            if(!blocked){
-                                normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
-                                float lightStrenght = (float) normal.dot(directionalLight.inverted());
-                                HDRColor col = closestObj.getMaterial().getColor();
-                                if(lightStrenght < 0.0f){
-                                    lightStrenght = 0f;
-                                }
-                                col = col.multiply(lightStrenght*lightIntesity);
-        
-                                finalColor = finalColor.add(col);
                             }
                         }
+                        if(!blocked){
+                            //normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
+                            float lightStrenght = (float) normal.dot(directionalLight.inverted());
+                            HDRColor col = closestObj.getMaterial().getColor();
+                            if(lightStrenght < 0.0f){
+                                lightStrenght = 0f;
+                            }
+                            col = col.multiply(lightStrenght*lightIntesity);
+    
+                            finalColor = finalColor.add(col);
+                        }
+                        if(closestObj.getMaterial().getRoughness() < 0.6f){ //hardcoded second bounce
+                            //ray reflection: r = d - 2*(d,n)*n
+                            dir = dir.sub(normal.mult(2 * dir.dot(normal)));
+                            ray = new Ray(end, dir.normalized());
+                            //create new ray and start again
+                        } 
+                        else {break;} //no more boing boing :(
                     }
                 }
                 cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f)).getRGB());
