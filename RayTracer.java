@@ -12,12 +12,12 @@ public class RayTracer {
     //funky shit
     HDRColor skytopColor = new HDRColor(new Color(0xFFD0D0FF), 1.0f);
     HDRColor skybottomColor = new HDRColor(new Color(0xFF201770), 1.0f);
-    Material mat1 = new Material(new Color(0xFFF0A729), 1.0f);
-    Material mat2 = new Material(new Color(0xFFB9CDD6), 1.0f);
-    Material mat3 = new Material(new Color(0xFFDF00DF), 0.5f);
-    Color ambientLighting = Color.BLACK;
+    Material mat1 = new Material(new Color(0xFFF0A729), 1f);
+    Material mat2 = new Material(new Color(0xFF5050AF), 1f);
+    Material mat3 = new Material(new Color(0xFFFFFFFF), 0.5f);
+    int maxBounces = 3;
+    float ambientIntensity = 0.3f;
     float lightIntesity = 1.0f;
-    int maxBounces = 1;
 
     //float strongest = 0f;
 
@@ -38,7 +38,7 @@ public class RayTracer {
         Sphere obj1 = new Sphere(new Vector3(0, 0, 5), 1, mat1);
         Sphere obj2 = new Sphere(new Vector3(2, -1, 4), 1.0, mat3);
         Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat1);
-        Plane floor = new Plane(new Vector3(0, -2.0, 0), new Vector3(0, 1.0, 0), 2, mat3);
+        Plane floor = new Plane(new Vector3(0, -2.0, 0), new Vector3(0, 1.0, 0), 2, mat2);
 
         objects.add(obj1);
         objects.add(obj2);
@@ -149,16 +149,18 @@ public class RayTracer {
                 //init a few things
                 float closestDist;
                 Drawable closestObj;
-
+                float rayDecay = 1.0f; //light gets absorb when bouncing, this multiplier make the ray weaker
                 //----------------------------------------------------------- repeat this for bouncing
                 for (int k = 0; k <= maxBounces; k++) {
                     closestDist = rayEach(objects, ray, closestObjAddress); 
                     closestObj = closestObjAddress[0];
+                    
 
                     if(closestDist <= 0){ //hit sky
                         float t = ((float) ray.dir.y + 1.0f)*0.5f;
                         //System.out.println(t);
                         finalColor = finalColor.add(HDRColor.lerpColors(skybottomColor, skytopColor, t));
+                        finalColor = finalColor.multiply(rayDecay*maxBounces);
                         break;
                     }
                     else{
@@ -170,11 +172,12 @@ public class RayTracer {
                             if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
                                 blocked = obj.hitSimple(endRay);
                                 if(blocked){
-                                    //finalColor = finalColor.add(new HDRColor(0, 0, 0)); //redundant because yea
+                                    //finalColor = finalColor.add(skytopColor.multiply(ambientIntensity)); //shadow can have a little ambience
                                     break;
                                 }
                             }
                         }
+                        float roughness = closestObj.getMaterial().getRoughness();
                         if(!blocked){
                             //normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
                             float lightStrenght = (float) normal.dot(directionalLight.inverted());
@@ -182,20 +185,27 @@ public class RayTracer {
                             if(lightStrenght < 0.0f){
                                 lightStrenght = 0f;
                             }
-                            col = col.multiply(lightStrenght*lightIntesity);
+                            col = col.multiply(lightStrenght*lightIntesity*rayDecay*roughness);
+                            float t = ((float) normal.y + 1.0f)*0.5f; //ambient color
+                            col = col.add(HDRColor.lerpColors(skybottomColor, skytopColor, t).multiply(ambientIntensity*(1-lightStrenght)));
     
                             finalColor = finalColor.add(col);
                         }
-                        if(closestObj.getMaterial().getRoughness() < 0.6f){ //hardcoded second bounce
+                        if(roughness < 0.95f){ //do the bounce
                             //ray reflection: r = d - 2*(d,n)*n
                             dir = dir.sub(normal.mult(2 * dir.dot(normal)));
                             ray = new Ray(end, dir.normalized());
                             //create new ray and start again
+                            float a = 4f;
+                            rayDecay = a/(k+1.0f + a);
                         } 
-                        else {break;} //no more boing boing :(
+                        else {
+                            finalColor = finalColor.multiply(maxBounces);
+                            break;
+                        } //no more boing boing :(
                     }
                 }
-                cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f)).getRGB());
+                cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f/maxBounces)).getRGB());
             }
         }
     }
