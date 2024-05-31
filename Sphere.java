@@ -42,4 +42,8 @@ public class Sphere extends Drawable{
     public Material getMaterial(){
         return mat;
     }
+
+    public HDRColor getColor(Vector3 point){
+        return mat.getColor();
+    }
 }

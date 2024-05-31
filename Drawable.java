@@ -9,4 +9,6 @@ public abstract class Drawable {
     public abstract Vector3 getNormal(Vector3 point);
 
     public abstract Material getMaterial();
+
+    public abstract HDRColor getColor(Vector3 point);
 }

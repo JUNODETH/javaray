@@ -34,4 +34,19 @@ public class Plane extends Drawable {
     public Material getMaterial(){
         return mat;
     }
+
+    public HDRColor getColor(Vector3 point){
+        HDRColor black = new HDRColor(0f, 0f, 0f);
+        float t = (float) point.x;
+        float u = (float) point.z;
+        t+= Math.round(u);
+        if (t < 0f){
+            t = -t + 1f;
+        }
+        
+        t %= 2f;
+        t *= 0.5f;
+        t = Math.round(t);
+        return HDRColor.lerpColors(black, mat.getColor(), t);
+    }
 }

@@ -181,7 +181,7 @@ public class RayTracer {
                         if(!blocked){
                             //normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
                             float lightStrenght = (float) normal.dot(directionalLight.inverted());
-                            HDRColor col = closestObj.getMaterial().getColor();
+                            HDRColor col = closestObj.getColor(end);
                             if(lightStrenght < 0.0f){
                                 lightStrenght = 0f;
                             }
