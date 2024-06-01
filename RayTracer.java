@@ -13,11 +13,11 @@ public class RayTracer {
     HDRColor skytopColor = new HDRColor(new Color(0xFFD0D0FF), 1.5f);
     HDRColor skybottomColor = new HDRColor(new Color(0xFF201770), 1.0f);
     Material mat1 = new Material(new Color(0xFFF0A729), 1f);
-    Material mat2 = new Material(new Color(0xFF5050AF), 1f);
+    Material mat2 = new Material(new Color(0xFF50F070), 1f);
     Material mat3 = new Material(new Color(0xFFFFFFFF), 0.0f);
     Material mat4 = new Material(new Color(0xFF00FF00), 0.0f);
-    int maxBounces = 1;
-    float ambientIntensity = 0.1f;
+    int maxBounces = 4;
+    float ambientIntensity = 0.25f;
     float lightIntesity = 1.0f;
 
     //float strongest = 0f;
@@ -36,10 +36,10 @@ public class RayTracer {
         //Material mat1 = new Material(0xFFFF0000, 1.0f);
 
         Vector<Drawable> objects = new Vector<>();
-        Sphere obj1 = new Sphere(new Vector3(0, 0, 5), 1, mat1);
+        Sphere obj1 = new Sphere(new Vector3(0, 0, 5), 1, mat3);
         Sphere obj2 = new Sphere(new Vector3(2, -1, 4), 1.0, mat3);
-        Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat1);
-        Plane floor = new Plane(new Vector3(0, -2.0, 0), new Vector3(0, 1.0, 0), 2, mat2);
+        Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat3);
+        Plane floor = new Plane(new Vector3(0, -2.0, 5f), new Vector3(0, 1.0, 0), 2, mat3);
 
         objects.add(obj1);
         objects.add(obj2);
@@ -134,6 +134,7 @@ public class RayTracer {
     void drawColor(Vector<Drawable> objects, Camera cam){
         for(int i = 0; i < cam.width; i++){
             for(int j = 0; j < cam.height; j++){
+                HDRColor shadowOnly = new HDRColor(1f, 1f, 1f);
                 HDRColor finalColor = new HDRColor(1f, 1f, 1f);
                 Ray ray;
                 Vector3 dir = new Vector3((i-cam.halfW)*cam.heightInv, (cam.halfH-j)*cam.heightInv, 1).normalized();
@@ -149,7 +150,7 @@ public class RayTracer {
                 Drawable closestObjAddress[] = { null }; //janky workaround to do C like pointer stuff but with single element arrays
                 //init a few things
                 float closestDist;
-                Drawable closestObj;
+                Drawable closestObj = null;
                 float rayDecay = 1.0f; //light gets absorb when bouncing, this multiplier make the ray weaker
                 //----------------------------------------------------------- repeat this for bouncing
                 for (int k = 0; k <= maxBounces; k++) {
@@ -165,7 +166,7 @@ public class RayTracer {
                         break;
                     }
                     else{
-                        Vector3 end = cam.pos.add(ray.pointAt(closestDist));
+                        Vector3 end = ray.pointAt(closestDist);
                         Vector3 normal = closestObj.getNormal(end);
                         boolean blocked = false;
                         Ray endRay = new Ray(end, directionalLight.inverted());
@@ -173,9 +174,10 @@ public class RayTracer {
                             if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
                                 blocked = obj.hitSimple(endRay);
                                 if(blocked){
+                                    shadowOnly = shadowOnly.multiply(0.0f);
                                     HDRColor col = closestObj.getColor(end);
                                     finalColor = finalColor.multiply(col);
-                                    finalColor = finalColor.multiply(skybottomColor.multiply(ambientIntensity)); //shadow can have a little ambience
+                                    finalColor = finalColor.multiply(skybottomColor.multiply(ambientIntensity*2)); //shadow can have a little ambience
                                     break;
                                 }
                             }
@@ -191,13 +193,12 @@ public class RayTracer {
                             col = col.multiply(lightStrenght*lightIntesity*rayDecay);
                             float t = ((float) normal.y + 1.0f)*0.5f; //ambient color
                             col = col.add(HDRColor.lerpColors(skybottomColor, skytopColor, t).multiply(ambientIntensity*(1-lightStrenght)));
-    
                             finalColor = finalColor.multiply(col);
                         }
                         if(roughness < 0.95f){ //do the bounce
                             //ray reflection: r = d - 2*(d,n)*n
-                            dir = dir.sub(normal.mult(2 * dir.dot(normal)));
-                            ray = new Ray(end, dir.normalized());
+                            dir = dir.sub(normal.mult(2 * dir.dot(normal))).normalized();
+                            ray = new Ray(end, dir);
                             //create new ray and start again
                             float a = 4f;
                             //rayDecay = a/(k+1.0f + a);
@@ -209,6 +210,7 @@ public class RayTracer {
                     }
                 }
                 cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f)).getRGB());
+                //cam.img.setRGB(i, j, HDRColor.hdrToSdr(shadowOnly).getRGB()); //test for only drawing shadows
             }
         }
     }
@@ -220,9 +222,10 @@ public class RayTracer {
      */
     public float rayEach(Vector<Drawable> objects, Ray ray, Drawable[] closestObj){
         float closestDist = Float.MAX_VALUE;
+        Drawable startObj = closestObj[0];
         
         for (Drawable obj : objects) {
-            Drawable startObj = closestObj[0];
+            
             if(obj != startObj){
                 float t = (float) obj.hit(ray);
                 if(t > 0 && t <= closestDist){

@@ -19,6 +19,9 @@ public class Plane extends Drawable {
     public double hit(Ray r){
         double a = normal.dot(center.sub(r.origin));
         double b = normal.dot(r.dir);
+        /*if(b == 0){
+            
+        } */
         return a/b;
     }
     public boolean hitSimple(Ray r){
