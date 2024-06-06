@@ -10,15 +10,22 @@ import javax.imageio.ImageIO;
  */
 public class RayTracer {
     //funky shit
-    HDRColor skytopColor = new HDRColor(new Color(0xFFD0D0FF), 1.5f);
+    //HDRColor skytopColor = new HDRColor(new Color(0xFFD0D0FF), 1.0f);
+    HDRColor skytopColor = new HDRColor(new Color(0xFFFFFFFF), 1.0f);
     HDRColor skybottomColor = new HDRColor(new Color(0xFF201770), 1.0f);
-    Material mat1 = new Material(new Color(0xFFF0A729), 1f);
-    Material mat2 = new Material(new Color(0xFF50F070), 1f);
+    Material mat1 = new Material(new Color(0xFFFFFFFF), 0.5f);
+    Material mat2 = new Material(new Color(0xFF50F070), 1.0f);
     Material mat3 = new Material(new Color(0xFFFFFFFF), 0.0f);
     Material mat4 = new Material(new Color(0xFF00FF00), 0.0f);
     int maxBounces = 4;
     float ambientIntensity = 0.25f;
     float lightIntesity = 1.0f;
+
+    float[][] depthMask;
+    float[][] diffuseMask; //saves the lambertian diffuse gradient thingy
+    HDRImage reflectPass;
+    HDRImage roughPass;
+    HDRImage resultImage;
 
     //float strongest = 0f;
 
@@ -36,23 +43,34 @@ public class RayTracer {
         //Material mat1 = new Material(0xFFFF0000, 1.0f);
 
         Vector<Drawable> objects = new Vector<>();
-        Sphere obj1 = new Sphere(new Vector3(0, 0, 5), 1, mat3);
-        Sphere obj2 = new Sphere(new Vector3(2, -1, 4), 1.0, mat3);
+        Sphere obj1 = new Sphere(new Vector3(-1.5, -1, 4), 1, mat1);
+        Sphere obj2 = new Sphere(new Vector3(1.5, -1, 4), 1.0, mat3);
         Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat3);
-        Plane floor = new Plane(new Vector3(0, -2.0, 5f), new Vector3(0, 1.0, 0), 2, mat3);
+        Plane floor = new Plane(new Vector3(0, -2.0, 5f), new Vector3(0, 1.0, 0), 2, mat2);
 
         objects.add(obj1);
         objects.add(obj2);
-        objects.add(obj3);
+        //objects.add(obj3);
         objects.add(floor);
 
         //instantiate scene
         Camera cam = new Camera(640, 640);
         //cam.isOrthogonal = true;
+        
+        diffuseMask = new float[cam.width][cam.height];
+        depthMask = new float[cam.width][cam.height];
+        reflectPass = new HDRImage(cam.width, cam.height);
 
         //drawDepth(objects, cam);
         //drawNormal(objects, cam);
         drawColor(objects, cam);
+        for(int i = 0; i < cam.width; i++){
+            for(int j = 0; j < cam.height; j++){
+                //cam.img.setRGB(i, j, HDRColor.hdrToSdr(reflectPass.pixels[i][j]).getRGB());
+                cam.img.setRGB(i, j, HDRColor.hdrToSdr(new HDRColor(diffuseMask[i][j], diffuseMask[i][j], diffuseMask[i][j])).getRGB());
+                //System.out.println(depthMask[i][j]);
+            }
+        }
 
         //everything gets saved in a buffered image and displayed
         try {
@@ -79,19 +97,21 @@ public class RayTracer {
                         //closestObj = obj;
                     }
                 }
-                if (closestDist == Float.MAX_VALUE) {
+                /*if (closestDist == Float.MAX_VALUE) {
                     closestDist = -1.0f;
-                }
+                }*/
                 
                 if(closestDist <= 0){
-                    cam.img.setRGB(i, j, 0xFFFFFFFF); //draw white
+                    depthMask[i][j] = -1.0f;
                 }
                 else{
-                    float depthConstant = 3.0f; //needs to be > 0
+                    /////-------------------CODE FOR ACTUAL COLOR DISPLAYING BUT INSTEAD I JUST STORE ACTUAL   
+                    /*float depthConstant = 3.0f; //needs to be > 0
                     float scaledDepth = (1 - (depthConstant / (closestDist + depthConstant)));
                     int gray = Math.round(scaledDepth * 255);
                     //System.out.print(t + " " + scaledDepth + " " + gray + " ");
-                    cam.img.setRGB(i, j, new Color(gray, gray, gray).getRGB());
+                    cam.img.setRGB(i, j, new Color(gray, gray, gray).getRGB());*/
+                    depthMask[i][j] = closestDist;
                 }
             }
         }
@@ -134,7 +154,7 @@ public class RayTracer {
     void drawColor(Vector<Drawable> objects, Camera cam){
         for(int i = 0; i < cam.width; i++){
             for(int j = 0; j < cam.height; j++){
-                HDRColor shadowOnly = new HDRColor(1f, 1f, 1f);
+                //HDRColor shadowOnly = new HDRColor(1f, 1f, 1f);
                 HDRColor finalColor = new HDRColor(1f, 1f, 1f);
                 Ray ray;
                 Vector3 dir = new Vector3((i-cam.halfW)*cam.heightInv, (cam.halfH-j)*cam.heightInv, 1).normalized();
@@ -152,17 +172,17 @@ public class RayTracer {
                 float closestDist;
                 Drawable closestObj = null;
                 float rayDecay = 1.0f; //light gets absorb when bouncing, this multiplier make the ray weaker
+                float distanceTraveled = 0f;
                 //----------------------------------------------------------- repeat this for bouncing
                 for (int k = 0; k <= maxBounces; k++) {
                     closestDist = rayEach(objects, ray, closestObjAddress); 
                     closestObj = closestObjAddress[0];
-                    
 
                     if(closestDist <= 0){ //hit sky
                         float t = ((float) ray.dir.y + 1.0f)*0.5f;
                         //System.out.println(t);
                         finalColor = finalColor.multiply(HDRColor.lerpColors(skybottomColor, skytopColor, t));
-                        finalColor = finalColor.multiply(rayDecay);
+                        //finalColor = finalColor.multiply(rayDecay); //raydecay only happens for pointlights (reflected), sky is not a point light
                         break;
                     }
                     else{
@@ -174,7 +194,7 @@ public class RayTracer {
                             if(obj != closestObj){ //dont check self, checking self fucks shit up cause imprecision
                                 blocked = obj.hitSimple(endRay);
                                 if(blocked){
-                                    shadowOnly = shadowOnly.multiply(0.0f);
+                                    //shadowOnly = shadowOnly.multiply(0.0f);
                                     HDRColor col = closestObj.getColor(end);
                                     finalColor = finalColor.multiply(col);
                                     finalColor = finalColor.multiply(skybottomColor.multiply(ambientIntensity*2)); //shadow can have a little ambience
@@ -182,34 +202,54 @@ public class RayTracer {
                                 }
                             }
                         }
-                        float roughness = closestObj.getMaterial().getRoughness();
-                        if(!blocked){
-                            //normal = closestObj.getNormal(end); //ignore warning, closestObj gets set in rayEach
+
+                        //-------- calculate the lambertian diffuse per pixel
+                        if(k == 0){ //get the lambertian shittt, not important for bounce
                             float lightStrenght = (float) normal.dot(directionalLight.inverted());
-                            HDRColor col = closestObj.getColor(end);
                             if(lightStrenght < 0.0f){
                                 lightStrenght = 0f;
                             }
-                            col = col.multiply(lightStrenght*lightIntesity*rayDecay);
-                            float t = ((float) normal.y + 1.0f)*0.5f; //ambient color
-                            col = col.add(HDRColor.lerpColors(skybottomColor, skytopColor, t).multiply(ambientIntensity*(1-lightStrenght)));
+                            diffuseMask[i][j] = lightStrenght;
+                            depthMask[i][j] = closestDist;
+                        }
+
+
+                        //float roughness = closestObj.getMaterial().getRoughness();
+                        if(!blocked){
+                            HDRColor col = closestObj.getColor(end);
+
+                            col = col.multiply(lightIntesity*rayDecay);
+                            //float t = ((float) normal.y + 1.0f)*0.5f; //ambient color
+                            //col = col.add(HDRColor.lerpColors(skybottomColor, skytopColor, t).multiply(ambientIntensity*(1-lightStrenght)));
                             finalColor = finalColor.multiply(col);
                         }
-                        if(roughness < 0.95f){ //do the bounce
+
+                        //ray reflection: r = d - 2*(d,n)*n
+                        dir = dir.sub(normal.mult(2 * dir.dot(normal))).normalized();
+                        ray = new Ray(end, dir);
+                        //create new ray and start again
+                        distanceTraveled += closestDist;
+                        float a = 8f; //scalar for lightfallof
+                        rayDecay = a/(distanceTraveled+a);
+
+                        //------------deprecated roughness stuff
+                        /*if(roughness < 0.95f){ //do the bounce
                             //ray reflection: r = d - 2*(d,n)*n
                             dir = dir.sub(normal.mult(2 * dir.dot(normal))).normalized();
                             ray = new Ray(end, dir);
                             //create new ray and start again
-                            float a = 4f;
-                            //rayDecay = a/(k+1.0f + a);
-                        } 
+                            distanceTraveled += closestDist;
+                            float a = 8f; //scalar for lightfallof
+                            rayDecay = a/(distanceTraveled+a);
+                        }
                         else {
                             //finalColor = finalColor.multiply(maxBounces);
                             break;
-                        } //no more boing boing :(
+                        } //no more boing boing :( */
                     }
                 }
-                cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f)).getRGB());
+                reflectPass.pixels[i][j] = finalColor;
+                //cam.img.setRGB(i, j, HDRColor.hdrToSdr(finalColor.multiply(1.0f)).getRGB());
                 //cam.img.setRGB(i, j, HDRColor.hdrToSdr(shadowOnly).getRGB()); //test for only drawing shadows
             }
         }
