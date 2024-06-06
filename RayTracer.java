@@ -54,14 +54,14 @@ public class RayTracer {
         objects.add(obj3);
         objects.add(floor);
 
-        int objCount = 0;
+        int objCount = 1; //start at 1, 0 is sky
         for (Drawable obj : objects) {
             obj.index = objCount++;
             //System.out.println(obj.index);
         }
 
         //instantiate scene
-        Camera cam = new Camera(320, 320);
+        Camera cam = new Camera(640, 640);
         //cam.isOrthogonal = true;
         
         diffuseMask = new float[cam.width][cam.height];
@@ -309,7 +309,7 @@ public class RayTracer {
 
         HDRImage res = reflectPass;
         for (int i = 0; i < 32; i++) {
-            res = res.convolve(gaussianMatr);
+            res = res.convolve(gaussianMatr, indexMask);
         }
 
         return res;
