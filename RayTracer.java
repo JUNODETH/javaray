@@ -21,6 +21,7 @@ public class RayTracer {
     float ambientIntensity = 0.25f;
     float lightIntesity = 1.0f;
 
+    int[][] indexMask;
     float[][] depthMask;
     float[][] diffuseMask; //saves the lambertian diffuse gradient thingy
     HDRImage reflectPass;
@@ -50,24 +51,34 @@ public class RayTracer {
 
         objects.add(obj1);
         objects.add(obj2);
-        //objects.add(obj3);
+        objects.add(obj3);
         objects.add(floor);
 
+        int objCount = 0;
+        for (Drawable obj : objects) {
+            obj.index = objCount++;
+            //System.out.println(obj.index);
+        }
+
         //instantiate scene
-        Camera cam = new Camera(640, 640);
+        Camera cam = new Camera(320, 320);
         //cam.isOrthogonal = true;
         
         diffuseMask = new float[cam.width][cam.height];
         depthMask = new float[cam.width][cam.height];
+        indexMask = new int[cam.width][cam.height];
         reflectPass = new HDRImage(cam.width, cam.height);
 
         //drawDepth(objects, cam);
         //drawNormal(objects, cam);
         drawColor(objects, cam);
+
+        resultImage = postProcess();
+        
         for(int i = 0; i < cam.width; i++){
             for(int j = 0; j < cam.height; j++){
-                //cam.img.setRGB(i, j, HDRColor.hdrToSdr(reflectPass.pixels[i][j]).getRGB());
-                cam.img.setRGB(i, j, HDRColor.hdrToSdr(new HDRColor(diffuseMask[i][j], diffuseMask[i][j], diffuseMask[i][j])).getRGB());
+                cam.img.setRGB(i, j, HDRColor.hdrToSdr(resultImage.pixels[i][j]).getRGB());
+                //cam.img.setRGB(i, j, HDRColor.hdrToSdr(new HDRColor(diffuseMask[i][j], diffuseMask[i][j], diffuseMask[i][j])).getRGB());
                 //System.out.println(depthMask[i][j]);
             }
         }
@@ -211,6 +222,7 @@ public class RayTracer {
                             }
                             diffuseMask[i][j] = lightStrenght;
                             depthMask[i][j] = closestDist;
+                            indexMask[i][j] = closestObj.index;
                         }
 
 
@@ -280,4 +292,27 @@ public class RayTracer {
 
         return closestDist;
     }
+
+    public HDRImage postProcess(){
+        //generate the 5x5 matrix for blurring the reflections with convolution
+        float gaussianCoeff = 1f/256f;
+        float[][] gaussianMatr = { {1, 4, 6, 4, 1 },
+                                {4, 16, 24, 16, 4},
+                                {6, 24, 36, 24, 6},
+                                {4, 16, 24, 16, 4},
+                                {1, 4, 6, 4, 1 }};
+        for(int i = 0; i < 5; i++){
+            for(int j = 0; j < 5; j++){
+                gaussianMatr[i][j] *= gaussianCoeff;
+            }
+        }
+
+        HDRImage res = reflectPass;
+        for (int i = 0; i < 32; i++) {
+            res = res.convolve(gaussianMatr);
+        }
+
+        return res;
+    }
+
 }
