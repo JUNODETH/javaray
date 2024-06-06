@@ -3,6 +3,9 @@ public class Plane extends Drawable {
     private Vector3 normal;
     public double size;
 
+    //public static int objCount = 0;
+    public int index;
+
     public Material mat;
     /**
      * 

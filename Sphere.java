@@ -4,6 +4,9 @@ public class Sphere extends Drawable{
 
     public Material mat;
 
+    //public static int objCount = 0;
+    public int index;
+
     public Sphere(Vector3 center, double radius, Material mat){
         this.center = center;
         this.radius = radius;
@@ -17,7 +20,14 @@ public class Sphere extends Drawable{
         double c = oc.dot(oc) - radius*radius;
         double discriminant = b*b - 4*a*c;
 
-        return (discriminant > 0);
+        //knowing if there was a hit isnt enough, because the hit could be behind
+
+        if(discriminant < 0){
+            return false; //no hit
+        }
+        else{ //wurzel ist plus/minus, es gibt zwar meistens zwei schnittpunkte, aber nur der nähste wird gesucht -> nur der minus fall betrachtet
+            return (((-b - Math.sqrt(discriminant)) / (2.0*a)) >= 0f);
+        }
     }
     public double hit(Ray r){ //returns distance to camera
         Vector3 oc = r.origin.sub(center);
@@ -27,7 +37,7 @@ public class Sphere extends Drawable{
         double discriminant = b*b - 4*a*c;
 
         if(discriminant < 0){
-            return -1.0; //is behind camera -> doesnt need to be drawn
+            return -1.0; //no hit
         }
         else{ //wurzel ist plus/minus, es gibt zwar meistens zwei schnittpunkte, aber nur der nähste wird gesucht -> nur der minus fall betrachtet
             return (-b - Math.sqrt(discriminant)) / (2.0*a);
