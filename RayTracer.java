@@ -1,5 +1,6 @@
 import java.awt.Color;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Vector;
 import java.io.File;
 
@@ -13,11 +14,11 @@ public class RayTracer {
     //HDRColor skytopColor = new HDRColor(new Color(0xFFD0D0FF), 1.0f);
     HDRColor skytopColor = new HDRColor(new Color(0xFFFFFFFF), 1.0f);
     HDRColor skybottomColor = new HDRColor(new Color(0xFF201770), 1.0f);
-    Material mat1 = new Material(new Color(0xFFFFFFFF), 0.5f);
-    Material mat2 = new Material(new Color(0xFF50F070), 1.0f);
+    Material mat1 = new Material(new Color(0xFFA0A0FF), 0.5f);
+    Material mat2 = new Material(new Color(0xFF50F070), 0.9f);
     Material mat3 = new Material(new Color(0xFFFFFFFF), 0.0f);
     Material mat4 = new Material(new Color(0xFF00FF00), 0.0f);
-    int maxBounces = 4;
+    int maxBounces = 5;
     float ambientIntensity = 0.25f;
     float lightIntesity = 1.0f;
 
@@ -44,14 +45,14 @@ public class RayTracer {
         //Material mat1 = new Material(0xFFFF0000, 1.0f);
 
         Vector<Drawable> objects = new Vector<>();
-        Sphere obj1 = new Sphere(new Vector3(-1.5, -1, 4), 1, mat1);
-        Sphere obj2 = new Sphere(new Vector3(1.5, -1, 4), 1.0, mat3);
+        Sphere obj1 = new Sphere(new Vector3(-2, -0.5, 5), 1.5, mat1);
+        Sphere obj2 = new Sphere(new Vector3(2, -0.5, 5), 1.5, mat3);
         Sphere obj3 = new Sphere(new Vector3(-1, 1, 3), 1.0, mat3);
         Plane floor = new Plane(new Vector3(0, -2.0, 5f), new Vector3(0, 1.0, 0), 2, mat2);
 
         objects.add(obj1);
         objects.add(obj2);
-        objects.add(obj3);
+        //objects.add(obj3);
         objects.add(floor);
 
         int objCount = 1; //start at 1, 0 is sky
@@ -68,6 +69,7 @@ public class RayTracer {
         depthMask = new float[cam.width][cam.height];
         indexMask = new int[cam.width][cam.height];
         reflectPass = new HDRImage(cam.width, cam.height);
+        roughPass = new HDRImage(cam.width, cam.height);
 
         //drawDepth(objects, cam);
         //drawNormal(objects, cam);
@@ -193,6 +195,9 @@ public class RayTracer {
                         float t = ((float) ray.dir.y + 1.0f)*0.5f;
                         //System.out.println(t);
                         finalColor = finalColor.multiply(HDRColor.lerpColors(skybottomColor, skytopColor, t));
+                        if(k==0){
+                            diffuseMask[i][j] = 1f;
+                        }
                         //finalColor = finalColor.multiply(rayDecay); //raydecay only happens for pointlights (reflected), sky is not a point light
                         break;
                     }
@@ -242,7 +247,7 @@ public class RayTracer {
                         //create new ray and start again
                         distanceTraveled += closestDist;
                         float a = 8f; //scalar for lightfallof
-                        rayDecay = a/(distanceTraveled+a);
+                        //rayDecay = a/(distanceTraveled+a);
 
                         //------------deprecated roughness stuff
                         /*if(roughness < 0.95f){ //do the bounce
@@ -301,6 +306,15 @@ public class RayTracer {
                                 {6, 24, 36, 24, 6},
                                 {4, 16, 24, 16, 4},
                                 {1, 4, 6, 4, 1 }};
+                                
+        float[][] boxBlurMatr = new float[7][7];
+        for(int i = 0; i < 7; i++){
+            for(int j = 0; j < 7; j++){
+                boxBlurMatr[i][j] = 1f/49f;
+            }
+        }
+
+
         for(int i = 0; i < 5; i++){
             for(int j = 0; j < 5; j++){
                 gaussianMatr[i][j] *= gaussianCoeff;
@@ -308,8 +322,15 @@ public class RayTracer {
         }
 
         HDRImage res = reflectPass;
-        for (int i = 0; i < 32; i++) {
-            res = res.convolve(gaussianMatr, indexMask);
+        for (int i = 0; i < 16; i++) { //blur iteration
+            res = res.convolve(boxBlurMatr, indexMask);
+        }
+
+        for(int i = 0; i < res.width; i++){
+            for(int j = 0; j < res.height; j++){
+                roughPass.pixels[i][j] = res.pixels[i][j].multiply(diffuseMask[i][j]);
+                res.pixels[i][j] = HDRColor.lerpColors(res.pixels[i][j], roughPass.pixels[i][j], 0.5f);
+            }
         }
 
         return res;
